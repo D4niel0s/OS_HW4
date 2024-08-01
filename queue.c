@@ -4,7 +4,18 @@
 #include <threads.h>
 
 
-// Define the structure for a queue node
+/**
+ * The general idea is to hold a queue for condition variables, in order to
+ * maintain order of dequeue operations.
+ * 
+ * Each time an item is inserted, it wakes up the first thread waiting in dequeue,
+ * and each time an item is popped, it adds itself to the condition variable queue,
+ * in order to wait for it's turn.
+ */
+
+
+
+/* Structs for queue nodes */
 typedef struct Node{
     void *data;
     struct Node* next;
@@ -15,6 +26,8 @@ typedef struct CvarNode{
     struct CvarNode* next;
 } cvNode;
 
+
+/* This queue will be a field in the "main" queue - it will hold condition variables in the order they were created */
 typedef struct CvarQueue{
     cvNode* front;
     cvNode* rear;
@@ -23,7 +36,7 @@ typedef struct CvarQueue{
 } cvQueue;
 
 
-// Define the structure for the queue
+/* "main" queue struct */
 typedef struct Queue{
     Node* front;
     Node* rear;
@@ -36,6 +49,7 @@ typedef struct Queue{
 
 
 
+/* Functions for manipulating the condition variables queue*/
 cvNode* createCvNode(cnd_t *newVar) {
     cvNode* newNode = (cvNode*)malloc(sizeof(cvNode));
     
@@ -77,11 +91,14 @@ cnd_t *rmCV(cvQueue* cvq) {
 
 
 
-
+/* The "main" queue is declared here as a global */
 Queue *q;
 
 
-// Function to create a new node
+
+
+
+/* Helper function */
 Node* createNode(void *data) {
     Node* newNode = (Node*)malloc(sizeof(Node));
     
@@ -90,7 +107,7 @@ Node* createNode(void *data) {
     return newNode;
 }
 
-// Function to create an empty queue
+
 void initQueue(void){
     q = (Queue*)malloc(sizeof(Queue));
     
@@ -110,7 +127,8 @@ void initQueue(void){
     (q->cvq)->len = 0;
 }
 
-// Function to add an element to the queue
+
+/* Again, the idea is to wake up the first waiting dequeue operation - the front of the cvQueue*/
 void enqueue(void *data){
     cnd_t *CV;
     Node* newNode = createNode(data);
@@ -119,7 +137,7 @@ void enqueue(void *data){
     
     q->size += 1;
 
-    if((q->front) == NULL){ /*Empty queue*/
+    if((q->front) == NULL){
         q->front = newNode;
         q->rear = newNode;
 
@@ -131,9 +149,9 @@ void enqueue(void *data){
         return;
     }
 
+
     q->rear->next = newNode;
     q->rear = newNode;
-
     CV = rmCV(q->cvq);
     mtx_unlock(&(q->lock));
 
@@ -142,7 +160,7 @@ void enqueue(void *data){
     }
 }
 
-// Function to remove an element from the queue
+/* Again, the idead is to add the "request" to the cvQueue and wait for it's turn. If there are no requests and the queue is not empty, we just pop an item from the queue*/
 void *dequeue(void){
     cnd_t *CV;
     Node *temp;
@@ -190,8 +208,7 @@ void *dequeue(void){
 }
 
 
-
-
+/* Here it's a normal dequeue with a mutex around it*/
 bool tryDequeue(void **ret){
     Node* temp;
     void *data;
@@ -217,7 +234,7 @@ bool tryDequeue(void **ret){
     return true;
 }
 
-
+/* The values are maintained in the corresponding structs */
 size_t size(void){
     return q->size;
 }
@@ -228,7 +245,8 @@ size_t visited(void){
     return q->visited;
 }
 
-// Function to destroy the queue and free all allocated memory
+
+/* Free all allocated memory and destroy mutex and condition variables */
 void destroyQueue(void){
     cvNode* temp2;
     Node* temp1;
