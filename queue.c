@@ -82,7 +82,7 @@ cnd_t *rmCV(cvQueue* cvq) {
     if(cvq->front == NULL){
         cvq->rear = NULL;
     }
-    free(var);
+    free(var); /* var is allocated in dequeue */
     free(temp);
     
     cvq->len -= 1;
@@ -107,7 +107,7 @@ Node* createNode(void *data) {
     return newNode;
 }
 
-
+/* Allocate and initialize all data structures */
 void initQueue(void){
     q = (Queue*)malloc(sizeof(Queue));
     
@@ -118,8 +118,6 @@ void initQueue(void){
 
     q->size = 0;
     q->visited = 0;
-
-
     q->cvq = (cvQueue*)malloc(sizeof(cvQueue));
 
     (q->cvq)->front = NULL;
@@ -142,19 +140,23 @@ void enqueue(void *data){
         q->rear = newNode;
 
         CV = rmCV(q->cvq);
+
         mtx_unlock(&(q->lock));
+        /* Wake up the waiting thread */
         if(CV != NULL){
             cnd_signal(CV);
         }
         return;
     }
 
-
     q->rear->next = newNode;
     q->rear = newNode;
+
+    /* After adding an item to the queue, get the first item waiting for dequeue */
     CV = rmCV(q->cvq);
     mtx_unlock(&(q->lock));
 
+    /* Wake up the waiting thread */
     if(CV != NULL){
         cnd_signal(CV);
     }
@@ -169,6 +171,7 @@ void *dequeue(void){
     mtx_lock(&(q->lock));
 
     if((q->cvq)->front == NULL && q->front != NULL){
+        /* Remove an item from the queue as ususal */
         temp = q->front;
         data = temp->data;
         q->front = q->front->next;
@@ -184,6 +187,7 @@ void *dequeue(void){
         return data;
     }
 
+    /* Add a condition variable to the queue */
     CV = (cnd_t *)malloc(sizeof(cnd_t));
     cnd_init(CV);
     addCV(q->cvq, CV);
@@ -192,6 +196,7 @@ void *dequeue(void){
         cnd_wait(CV, &(q->lock));
     }
     
+    /* Remove an item from the queue */
     temp = q->front;
     data = temp->data;
     q->front = q->front->next;
